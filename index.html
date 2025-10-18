@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SDGs性別平權 — 第一關</title>
+  <style>
+    :root {
+      --bg: #f5efe6;
+      --roof: #8b5a2b;
+      --wall: #d8b384;
+      --accent: #e74c3c;
+      --ok: #2ecc71;
+      --text: #2c3e50;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Noto Sans TC", Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+    /* 頂部欄 */
+    header {
+      position: sticky; top:0; z-index: 5;
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 12px 16px; background: #ffffffcc; backdrop-filter: blur(4px);
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .title { font-weight: 800; letter-spacing: .5px; }
+    .score { font-weight: 700; }
+
+    /* 村莊地圖 */
+    .map-wrap { position: relative; height: calc(100vh - 64px); overflow:hidden; }
+    .map {
+      position:absolute; inset:0; padding:30px;
+      background: radial-gradient(1200px 600px at 70% 20%, #dff3ff 0%, #bfe6ff 40%, #a1d1ff 60%, #8bc5ff 70%, #7db9ff 80%, #74b1ff 100%) no-repeat,
+                  linear-gradient(180deg, #cde8c3 0 40%, #b5d89b 40% 100%);
+    }
+    .ground { position:absolute; inset:35% 0 0 0; background: repeating-linear-gradient(45deg, #b7d59f 0 14px, #b1d099 14px 28px); opacity:.25; }
+
+    /* 茅草屋 (可點擊) */
+    .hut { position:absolute; width:92px; height:62px; cursor:pointer; transition: transform .12s ease, opacity .4s ease; }
+    .hut:hover { transform: translateY(-2px) scale(1.02); }
+    .hut:active { transform: translateY(0) scale(.98); }
+    .hut .body { position:absolute; left:10px; right:10px; bottom:0; height:42px; background: var(--wall); border:2px solid #7e5429; border-top:none; border-radius: 2px 2px 6px 6px; }
+    .hut .roof { position:absolute; left:2px; right:2px; bottom:32px; height:0; border-left:44px solid transparent; border-right:44px solid transparent; border-bottom:26px solid var(--roof); filter: drop-shadow(0 2px 0 #6e4217); }
+    .hut .door { position:absolute; bottom:0; left:37px; width:18px; height:22px; background:#7e5429; border-radius: 2px 2px 0 0; }
+    .hut.answered { filter: grayscale(.8) contrast(.8); cursor: default; }
+    .hut.correct { opacity: 0; pointer-events:none; }
+
+    /* 把 10 間屋子散佈在地圖上 */
+    /* 這裡以百分比定位，方便不同螢幕 */
+    .h1 { left:8%;  top:48%; }
+    .h2 { left:18%; top:65%; }
+    .h3 { left:28%; top:52%; }
+    .h4 { left:36%; top:70%; }
+    .h5 { left:46%; top:58%; }
+    .h6 { left:56%; top:72%; }
+    .h7 { left:64%; top:52%; }
+    .h8 { left:74%; top:66%; }
+    .h9 { left:14%; top:38%; }
+    .h10{ left:62%; top:40%; }
+
+    /* 問題彈窗 */
+    .modal-backdrop { position: fixed; inset:0; background: #0006; display:none; align-items:center; justify-content:center; z-index: 10; }
+    .modal { width:min(560px, 92vw); background:white; border-radius:14px; padding:20px; box-shadow: 0 10px 30px #00000033; }
+    .modal h2 { margin:0 0 10px; font-size: 20px; }
+    .choices { display:grid; gap:10px; margin-top:12px; }
+    .choices button { padding:12px 14px; border:1px solid #e2e2e2; border-radius:12px; background:#fafafa; font-size:16px; cursor:pointer; transition: transform .06s ease, background .2s; text-align:left; }
+    .choices button:hover { background:#f0f0f0; }
+    .choices button:active { transform: scale(.98); }
+    .feedback { margin-top:10px; font-weight:700; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top: 14px; }
+    .hide { display:none !important; }
+
+    /* 結算畫面 */
+    .result { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#0008; z-index:12; }
+    .card { background:white; padding:22px; width:min(520px,92vw); border-radius:16px; box-shadow: 0 12px 40px #00000044; text-align:center; }
+    .card h3{ margin:0 0 8px; font-size:22px; }
+    .btn { display:inline-block; padding:12px 16px; border-radius:12px; border:none; cursor:pointer; font-weight:700; }
+    .btn-primary { background: var(--ok); color:white; }
+    .btn-danger  { background: var(--accent); color:white; }
+    .btn-ghost { background:#f3f3f3; }
+
+    footer { position:fixed; right:10px; bottom:10px; font-size:12px; opacity:.7; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">SDGs性別平權</div>
+    <div class="score">答對：<span id="score">0</span>/10</div>
+  </header>
+
+  <main class="map-wrap">
+    <div class="map" aria-label="村莊地圖">
+      <div class="ground" aria-hidden="true"></div>
+      <!-- 10 間茅草屋，每間對應一題 -->
+      <div class="hut h1"   data-q="0"  role="button" aria-label="茅草屋 1"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h2"   data-q="1"  role="button" aria-label="茅草屋 2"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h3"   data-q="2"  role="button" aria-label="茅草屋 3"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h4"   data-q="3"  role="button" aria-label="茅草屋 4"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h5"   data-q="4"  role="button" aria-label="茅草屋 5"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h6"   data-q="5"  role="button" aria-label="茅草屋 6"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h7"   data-q="6"  role="button" aria-label="茅草屋 7"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h8"   data-q="7"  role="button" aria-label="茅草屋 8"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h9"   data-q="8"  role="button" aria-label="茅草屋 9"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+      <div class="hut h10"  data-q="9"  role="button" aria-label="茅草屋 10"><div class="roof"></div><div class="body"></div><div class="door"></div></div>
+    </div>
+  </main>
+
+  <!-- 問題彈窗 -->
+  <section class="modal-backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+      <h2 id="qTitle">題目</h2>
+      <p id="qText" style="margin:6px 0 0 0"></p>
+      <div class="choices" id="choices"></div>
+      <div class="feedback" id="feedback"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="closeBtn">關閉</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 結果結算 -->
+  <section class="result" id="result">
+    <div class="card">
+      <h3 id="resultTitle">關卡結算</h3>
+      <p id="resultText" style="margin:8px 0 14px"></p>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
+        <button class="btn btn-danger" id="retryBtn">重新挑戰</button>
+        <a class="btn btn-primary" id="nextBtn" href="level2.html">前往下一關</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>第一關（index.html）</footer>
+
+  <script>
+    // 10 題（SDG 5 性別平權）
+    const questions = [
+      {
+        text: "SDGs 第 5 項目標的主題是？",
+        options: ["消除貧窮", "性別平權", "優質教育", "責任消費"],
+        answer: 1
+      },
+      {
+        text: "下列何者屬於性別刻板印象？",
+        options: ["男生適合當工程師、女生適合當護理師", "人人都能學寫程式", "家事應由家人共同分擔", "每個人都有受教育的權利"],
+        answer: 0
+      },
+      {
+        text: "在職場推動性別平等，下列何者較恰當？",
+        options: ["只聘用男性避免育嬰假", "提供彈性工時與育嬰友善制度", "限制女性升遷職位", "以性別決定薪資"],
+        answer: 1
+      },
+      {
+        text: "關於性騷擾的敘述何者正確？",
+        options: ["只是開玩笑不算", "只對異性才成立", "讓人感到不受尊重或不舒服即可構成", "只有肢體接觸才是"],
+        answer: 2
+      },
+      {
+        text: "下列何者是日常可實踐的性別平權行動？",
+        options: ["用性別稱呼取笑同學", "分擔家務與照顧工作", "僅邀男生參加科學競賽", "以性別決定社團職務"],
+        answer: 1
+      },
+      {
+        text: "學校中推動性別友善環境的作法是？",
+        options: ["建立申訴管道與教育訓練", "把體育課只留給男生", "禁止任何多元性別討論", "以性別分配學習資源"],
+        answer: 0
+      },
+      {
+        text: "薪資應以何者為依據？",
+        options: ["性別", "年齡", "工作內容、績效與資歷", "婚姻狀態"],
+        answer: 2
+      },
+      {
+        text: "對於多元性別的正確態度為何？",
+        options: ["尊重與包容", "忽視與排斥", "取笑與霸凌", "貼上負面標籤"],
+        answer: 0
+      },
+      {
+        text: "面試時，哪種提問較不恰當？",
+        options: ["過去的專案經驗", "對職務的期待", "是否打算結婚或生育", "對公司文化的看法"],
+        answer: 2
+      },
+      {
+        text: "下列何者能促進女生參與 STEM（理工）？",
+        options: ["限制女生修讀理工課", "提供榜樣與資源支持", "只開男生名額", "以性別限制社團加入"],
+        answer: 1
+      }
+    ];
+
+    let score = 0;
+    let answeredCount = 0; // 已作答題數（不論對錯）
+    const scoreEl = document.getElementById('score');
+
+    const modal = document.getElementById('modal');
+    const qTitle = document.getElementById('qTitle');
+    const qText = document.getElementById('qText');
+    const choicesWrap = document.getElementById('choices');
+    const feedback = document.getElementById('feedback');
+    const closeBtn = document.getElementById('closeBtn');
+
+    const result = document.getElementById('result');
+    const resultTitle = document.getElementById('resultTitle');
+    const resultText = document.getElementById('resultText');
+    const retryBtn = document.getElementById('retryBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    // 事件委派：點擊任一茅草屋彈出對應題目
+    document.querySelector('.map').addEventListener('click', (e) => {
+      const hut = e.target.closest('.hut');
+      if (!hut) return;
+      if (hut.classList.contains('answered')) return; // 已作答不再出題
+
+      const idx = Number(hut.dataset.q);
+      openQuestion(idx, hut);
+    });
+
+    closeBtn.addEventListener('click', () => modal.style.display = 'none');
+
+    retryBtn.addEventListener('click', () => window.location.reload());
+
+    function openQuestion(idx, hutEl) {
+      const q = questions[idx];
+      qTitle.textContent = `第 ${idx + 1} 題`;
+      qText.textContent = q.text;
+      feedback.textContent = '';
+      choicesWrap.innerHTML = '';
+
+      q.options.forEach((opt, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = opt;
+        btn.addEventListener('click', () => handleAnswer(i, q.answer, hutEl));
+        choicesWrap.appendChild(btn);
+      });
+
+      modal.style.display = 'flex';
+    }
+
+    function handleAnswer(choiceIdx, answerIdx, hutEl) {
+      const correct = choiceIdx === answerIdx;
+
+      // 標記此屋已作答（不論對錯，只能答一次）
+      hutEl.classList.add('answered');
+
+      if (correct) {
+        score++;
+        scoreEl.textContent = String(score);
+        feedback.textContent = '✅ 答對了！這間屋子消失～';
+        // 答對後讓屋子淡出並移除互動
+        hutEl.classList.add('correct');
+      } else {
+        feedback.textContent = '❌ 可惜，答錯囉！屋子保留，但此題已作答。';
+      }
+
+      answeredCount++;
+
+      // 所有 10 題都作答後顯示結算
+      if (answeredCount >= questions.length) {
+        setTimeout(showResult, 550);
+      }
+    }
+
+    function showResult() {
+      modal.style.display = 'none';
+      result.style.display = 'flex';
+
+      if (score >= 8) {
+        resultTitle.textContent = '太棒了！通過第一關！';
+        resultText.innerHTML = `你的成績：<strong>${score} / 10</strong><br>已解鎖下一關。`;
+        nextBtn.style.display = 'inline-block';
+      } else {
+        resultTitle.textContent = '尚未通過';
+        resultText.innerHTML = `你的成績：<strong>${score} / 10</strong><br>未達 8 題，請重新挑戰。`;
+        nextBtn.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
